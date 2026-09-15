@@ -1,0 +1,48 @@
+name: Deploy MySQL to K3s
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    # Targets your self-hosted K3s ARC runner scale set
+    runs-on: arc-runner-set
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 1. Set up the Kubernetes CLI (kubectl) on the runner
+      - name: Set up Kubectl
+        uses: azure/setup-kubectl@v4
+
+      # 2. Configure kubectl access using your GitHub Config Secret
+      - name: Configure Kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      # 3. Create the 'mysql' namespace if it doesn't already exist
+      - name: Create Namespace
+        run: |
+          kubectl create namespace mysql --dry-run=client -o yaml | kubectl apply -f -
+
+      # 4. Safely inject the GitHub Secret into a Kubernetes Secret
+      - name: Create MySQL Secret
+        run: |
+          kubectl create secret generic mysql-secrets \
+            --namespace=mysql \
+            --from-literal=root-password='${{ secrets.MYSQL_ROOT_PASSWORD }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # 5. Apply your updated mysql.yaml manifest
+      - name: Deploy MySQL Resources
+        run: |
+          kubectl apply -f mysql.yaml
+
+      # 6. Verify deployment rollouts
+      - name: Verify Deployment
+        run: |
+          kubectl rollout status deployment/mysql-deployment -n mysql --timeout=60s
