@@ -26,12 +26,7 @@ jobs:
           echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      # 3. Create the 'mysql' namespace if it doesn't already exist
-      - name: Create Namespace
-        run: |
-          kubectl create namespace mysql --dry-run=client -o yaml | kubectl apply -f -
-
-      # 4. Safely inject the GitHub Secret into a Kubernetes Secret
+      # 3. Safely inject the GitHub Secret into a Kubernetes Secret
       - name: Create MySQL Secret
         run: |
           kubectl create secret generic mysql-secrets \
@@ -39,12 +34,12 @@ jobs:
             --from-literal=root-password='${{ secrets.MYSQL_ROOT_PASSWORD }}' \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      # 5. Apply your updated mysql.yaml manifest
+      # 4. Apply your updated mysql.yaml manifest
       - name: Deploy MySQL Resources
         run: |
           kubectl apply -f devops/infrastructure/mysql/mysql.yml
 
-      # 6. Verify deployment rollouts
+      # 5. Verify deployment rollouts
       - name: Verify Deployment
         run: |
           kubectl rollout status deployment/mysql-deployment -n mysql --timeout=60s
