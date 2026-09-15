@@ -1,0 +1,12 @@
+## values.yaml
+githubConfigUrl: "https://github.com"
+
+# Instead of passing a token string, point to the secret created in Step 3
+githubConfigSecret:
+  name: arc-github-app-secret
+
+## Enable Docker-in-Docker (dind)
+containerMode:
+  type: "dind"
+
+maxRunners: 3
