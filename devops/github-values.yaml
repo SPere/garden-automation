@@ -1,0 +1,11 @@
+## values.yaml
+githubConfigUrl: "https://github.com"
+
+githubConfigSecret:
+  name: arc-github-app-secret # Stays the same as before
+
+# Turn off DinD since we only run kubectl scripts now
+containerMode:
+  type: "kubernetes" 
+
+maxRunners: 3
