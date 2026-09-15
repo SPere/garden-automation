@@ -8,6 +8,8 @@ jobs:
   deploy:
     # Targets your self-hosted K3s ARC runner scale set
     runs-on: arc-runner-set
+    container:
+      image: ubuntu:latest
 
     steps:
       - name: Checkout Code
@@ -40,7 +42,7 @@ jobs:
       # 5. Apply your updated mysql.yaml manifest
       - name: Deploy MySQL Resources
         run: |
-          kubectl apply -f mysql.yaml
+          kubectl apply -f devops/infrastructure/mysql/mysql.yml
 
       # 6. Verify deployment rollouts
       - name: Verify Deployment
