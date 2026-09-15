@@ -1,0 +1,67 @@
+name: Hybrid CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  # ----------------------------------------------------
+  # JOB 1: Build & Push Image (Runs on GitHub Cloud)
+  # ----------------------------------------------------
+  build-image:
+    runs-on: ubuntu-latest # Free GitHub-hosted runner
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Web API Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          # We tag it with the specific commit SHA to avoid caching issues during deployment
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/mysql-webapi:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/mysql-webapi:${{ github.sha }}
+
+  # ----------------------------------------------------
+  # JOB 2: Deploy to K3s (Runs on your local K3s hardware)
+  # ----------------------------------------------------
+  deploy-to-k3s:
+    runs-on: arc-runner-set # Targets your self-hosted K3s agent
+    needs: build-image      # Waits for Job 1 to finish successfully
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Because this runs natively inside your K3s cluster, 
+      # it doesn't need external Kubeconfig files or tokens to reach Kubernetes!
+      - name: Install Kubectl
+        uses: azure/setup-kubectl@v4
+
+      # Create/update deployment manifests using the freshly built image version
+      - name: Update and Apply K3s Deployment
+        run: |
+          # 1. Ensure the namespace exists
+          kubectl create namespace webapi --dry-run=client -o yaml | kubectl apply -f -
+          
+          # 2. Deploy your Web API components (Manifest is defined below)
+          kubectl apply -f k3s-webapi-deployment.yaml
+          
+          # 3. Force K3s to update the pods to use the new image version
+          kubectl set image deployment/webapi-deployment webapi-container=${{ secrets.DOCKERHUB_USERNAME }}/mysql-webapi:${{ github.sha }} -n webapi
+          
+          # 4. Check rollout status
+          kubectl rollout status deployment/webapi-deployment -n webapi --timeout=60s
