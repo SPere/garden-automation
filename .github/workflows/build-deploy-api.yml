@@ -27,10 +27,9 @@ jobs:
       - name: Build and Push Web API Image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile
+          context: src/webapi
+          file: src/webapi/Dockerfile
           push: true
-          # We tag it with the specific commit SHA to avoid caching issues during deployment
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/mysql-webapi:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/mysql-webapi:${{ github.sha }}
@@ -48,22 +47,36 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Because this runs natively inside your K3s cluster, 
-      # it doesn't need external Kubeconfig files or tokens to reach Kubernetes!
-      - name: Install Kubectl
+      - name: Set up Kubectl
         uses: azure/setup-kubectl@v4
 
-      # Create/update deployment manifests using the freshly built image version
-      - name: Update and Apply K3s Deployment
+      - name: Configure Kubeconfig
         run: |
-          # 1. Ensure the namespace exists
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Create Namespace
+        run: |
           kubectl create namespace webapi --dry-run=client -o yaml | kubectl apply -f -
-          
-          # 2. Deploy your Web API components (Manifest is defined below)
-          kubectl apply -f k3s-webapi-deployment.yaml
-          
-          # 3. Force K3s to update the pods to use the new image version
-          kubectl set image deployment/webapi-deployment webapi-container=${{ secrets.DOCKERHUB_USERNAME }}/mysql-webapi:${{ github.sha }} -n webapi
-          
-          # 4. Check rollout status
+
+      - name: Create MySQL Secret
+        run: |
+          kubectl create secret generic mysql-secrets \
+            --namespace=webapi \
+            --from-literal=root-password='${{ secrets.MYSQL_ROOT_PASSWORD }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy WebAPI Resources
+        run: |
+          kubectl apply -f devops/infrastructure/webapi/webapi.yml
+
+      - name: Update Image
+        run: |
+          kubectl set image deployment/webapi-deployment \
+            webapi-container=${{ secrets.DOCKERHUB_USERNAME }}/mysql-webapi:${{ github.sha }} \
+            -n webapi
+
+      - name: Verify Deployment
+        run: |
           kubectl rollout status deployment/webapi-deployment -n webapi --timeout=60s
