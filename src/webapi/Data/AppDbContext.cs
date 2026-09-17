@@ -5,5 +5,6 @@ namespace GardenApi.Data;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public DbSet<SensorReading> SensorReadings => Set<SensorReading>();
+    public DbSet<Metric> Metrics => Set<Metric>();
+    public DbSet<SensorLog> Logs => Set<SensorLog>();
 }
