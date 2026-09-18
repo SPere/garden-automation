@@ -6,7 +6,8 @@ namespace GardenApi.Controllers;
 [ApiController]
 public class ImageController(IConfiguration config) : ControllerBase
 {
-    private string GetBasePath() =>
+    // Resolved once at startup; IMAGE_STORAGE_PATH is not expected to change at runtime.
+    private readonly string _basePath =
         Environment.GetEnvironmentVariable("IMAGE_STORAGE_PATH")
             ?? config["ImageStorage:Path"]
             ?? "./images";
@@ -14,16 +15,15 @@ public class ImageController(IConfiguration config) : ControllerBase
     [HttpGet("/images")]
     public IActionResult GetImages()
     {
-        var basePath = GetBasePath();
-
-        var files = Directory.Exists(basePath)
-            ? new DirectoryInfo(basePath)
+        // Images are stored in date-named subdirectories, so AllDirectories is required.
+        var files = Directory.Exists(_basePath)
+            ? new DirectoryInfo(_basePath)
                 .EnumerateFiles("*", SearchOption.AllDirectories)
                 .OrderByDescending(f => f.LastWriteTimeUtc)
                 .Take(25)
                 .Select(f => new
                 {
-                    path = Path.GetRelativePath(basePath, f.FullName).Replace('\\', '/'),
+                    path = Path.GetRelativePath(_basePath, f.FullName).Replace('\\', '/'),
                     size = f.Length,
                     lastModified = f.LastWriteTimeUtc
                 })
@@ -42,7 +42,7 @@ public class ImageController(IConfiguration config) : ControllerBase
         // Strip characters unsafe for filenames to prevent path traversal
         var safeName = string.Concat(source.Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '-'));
 
-        var basePath = GetBasePath();
+        var basePath = _basePath;
 
         var now = DateTime.UtcNow;
         var subFolder = now.ToString("yyMMdd");
