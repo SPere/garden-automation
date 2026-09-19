@@ -2,6 +2,7 @@ using System.Globalization;
 using GardenApi.Data;
 using GardenApi.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace GardenApi.Controllers;
 
@@ -10,6 +11,17 @@ public class ReadingController(AppDbContext db) : ControllerBase
 {
     // Expected timestamp format: yyyyddMMHHmmssfff  e.g. 20261709100610123
     private const string TimestampFormat = "yyyyddMMHHmmssfff";
+
+    [HttpGet("/readings")]
+    public async Task<IActionResult> GetReadings()
+    {
+        var readings = await db.Metrics
+            .OrderByDescending(m => m.Timestamp)
+            .Take(25)
+            .ToListAsync();
+
+        return Ok(readings);
+    }
 
     [HttpPost("/save-reading")]
     public async Task<IActionResult> SaveReading([FromBody] DeviceReadingDto dto)
